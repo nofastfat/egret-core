@@ -34,8 +34,6 @@ module egret {
      * @extends egret.HashObject
      */
     export class StageText extends EventDispatcher {
-        public _multiline:boolean = false;
-        public _maxChars:number = 0;
 
         constructor() {
             super();
@@ -164,6 +162,7 @@ module egret {
         public _setHeight(value:number):void {
         }
 
+        public _multiline:boolean = false;
         public _setMultiline(value:boolean):void {
             this._multiline = value;
         }
