@@ -390,7 +390,29 @@ module egret {
         }
 
         public maxWidth;
-        public maxChars;
+
+        /**
+         * 文本字段中最多可包含的字符数（即用户输入的字符数）。
+         * 脚本可以插入比 maxChars 允许的字符数更多的文本；maxChars 属性仅表示用户可以输入多少文本。如果此属性的值为 0，则用户可以输入无限数量的文本。
+         * 默认值为 0。
+         * @type {number}
+         * @private
+         */
+        public _maxChars:number = 0;
+        public get maxChars():number {
+            return this._maxChars;
+        }
+
+        public set maxChars(value:number) {
+            this._setMaxChars(value);
+        }
+
+        public _setMaxChars(value:number):void {
+            if (this._maxChars != value) {
+                this._maxChars = value;
+            }
+        }
+
         public get maxScrollV():number {
             return this._numLines;
         }

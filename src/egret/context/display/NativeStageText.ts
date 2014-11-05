@@ -52,6 +52,7 @@ module egret {
             super();
             this.tf = new egret.TextField();
             var tf:egret.TextField = this.tf;
+            tf.multiline = true;
             tf.textColor = 0;
             tf.text = "";
             tf.textAlign = egret.HorizontalAlign.LEFT;
@@ -251,6 +252,7 @@ module egret {
                         return;
                     }
                 }
+
                 self.textValue += appendText;
 
                 self.resetText();

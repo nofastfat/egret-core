@@ -301,9 +301,9 @@ module egret {
                 self.setElementStyle("height", self._height + "px");
             }
             else {
-                var h = self.inputElement.style.height.split("px")[0];
                 self.inputElement.style.top = "-" + self.getTop() + "px";
             }
+            self.inputElement.setAttribute("maxlength", self._maxChars > 0 ? self._maxChars : -1);
 
             self.div.style.pointerEvents = self._visible ? "auto" : "none";
         }

@@ -168,6 +168,11 @@ module egret {
             this._multiline = value;
         }
 
+        public _maxChars:number = 0;
+        public _setMaxChars(value:number):void {
+            this._maxChars = value;
+        }
+
         public _resetStageText():void {
 
         }
