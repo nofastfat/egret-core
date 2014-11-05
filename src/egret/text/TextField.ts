@@ -690,10 +690,6 @@ module egret {
             for (var i = 0; i < length; i++) {
                 var lineArr:Array<any> = lines[i];
 
-                if (i != 0 && this._hasHeightSet && drawY + lineArr[lineArr.length - 1][1] > this._explicitHeight) {
-                    break;
-                }
-
                 drawX = Math.round((maxWidth - lineArr[lineArr.length - 1][0]) * halign);
 
                 minX = Math.min(minX, drawX);
@@ -710,6 +706,10 @@ module egret {
                     drawX += lineArr[j][2];
                 }
                 drawY += lineArr[lineArr.length - 1][1] + this._lineSpacing;
+
+                if (this._hasHeightSet && drawY - this._size * 0.5 > this._explicitHeight) {
+                    break;
+                }
             }
 
             return Rectangle.identity.initialize(minX, minY, maxWidth, textHeight);
