@@ -253,16 +253,6 @@ module egret {
                     }
                 }
 
-                if (self._maxChars > 0 && self.textValue.length + appendText.length > self._maxChars) {
-                    var num:number = self._maxChars - self.textValue.length;
-                    if (num > 0) {
-                        appendText = appendText.substring(0, num);
-                    }
-                    else {
-                        return;
-                    }
-                }
-
                 self.textValue += appendText;
 
                 self.resetText();
@@ -306,6 +296,8 @@ module egret {
                 egret_native.EGT_keyboardDidShow = function () {
                 }
             };
+
+            egret_native.TextInputOp.setInputTextMaxLenght(self._maxChars > 0 ? self._maxChars : -1);
 
             egret_native.TextInputOp.setKeybordOpen(true);
         }

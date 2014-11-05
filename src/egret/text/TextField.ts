@@ -126,6 +126,9 @@ module egret {
         public _text:string = "";
 
         public _setBaseText(value:string):void {
+            if (value == null) {
+                value = "";
+            }
             if (this._text != value || this._displayAsPassword) {
                 this._setTextDirty();
                 this._text = value;
@@ -152,6 +155,9 @@ module egret {
         }
 
         public _setText(value:string):void {
+            if (value == null) {
+                value = "";
+            }
             this._setBaseText(value);
             if (this._inputUtils) {
                 this._inputUtils._setText(this._text);
