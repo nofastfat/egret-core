@@ -103,7 +103,10 @@ module egret {
         }
 
         public _getText():string {
-            if (this._multiline) {//多行
+            if (this._type == egret.TextFieldType.INPUT) {
+                return this._inputUtils._getText();
+            }
+            else if (this._multiline) {//多行
                 return this._text;
             }
             else {
