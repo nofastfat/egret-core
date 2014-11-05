@@ -253,7 +253,7 @@ module egret {
                     }
                 }
 
-                if (self.textValue.length + appendText.length > self._maxChars) {
+                if (self._maxChars > 0 && self.textValue.length + appendText.length > self._maxChars) {
                     var num:number = self._maxChars - self.textValue.length;
                     if (num > 0) {
                         appendText = appendText.substring(0, num);
