@@ -159,12 +159,12 @@ module egret {
         }
 
         public _hide():void {
-            if(this._canUse) {
-                this._canUse = false;
+//            if(this._canUse) {
+            this._canUse = false;
 
-                this._closeInput();
-                this.closeKeyboard();
-            }
+            this._closeInput();
+            this.closeKeyboard();
+//            }
         }
 
         private _openInput():void {
@@ -253,7 +253,9 @@ module egret {
                 isChanged = true;
                 this._inputType = "input";
                 inputElement = document.createElement("input");
+                inputElement.style.position = "absolute";
                 inputElement.type = "text";
+//                inputElement.style.resize = "none";
             }
 
             if (isChanged) {//单、多行切换
@@ -285,7 +287,6 @@ module egret {
             self.setElementStyle("fontFamily", self._fontFamily);
             self.setElementStyle("color", self._color);
             self.setElementStyle("width", self._width + "px");
-            self.setElementStyle("height", self._height + "px");
             //默认值
             self.setElementStyle("border", "none");
             self.setElementStyle("background", "none");
@@ -293,8 +294,40 @@ module egret {
             self.setElementStyle("padding", "0");
             self.setElementStyle("outline", "medium");
             self.setElementStyle("verticalAlign", "top");
+            self.setElementStyle("wordBreak", "break-all");
+            self.setElementStyle("overflow", "hidden");
+
+            if (self._multiline) {
+                self.setElementStyle("height", self._height + "px");
+            }
+            else {
+                var h = self.inputElement.style.height.split("px")[0];
+                self.inputElement.style.top = "-" + self.getTop() + "px";
+            }
 
             self.div.style.pointerEvents = self._visible ? "auto" : "none";
+        }
+
+        private getTop():number {
+            if (this._size >= 22 && this._size <= 41) {
+                return 2;
+            }
+
+            if (this._size <= 12) {
+                return 7 - Math.ceil(this._size / 2);
+            }
+
+            if (this._size >= 13 && this._size <= 21) {
+                return 1;
+            }
+
+            if (this._size >= 42 && this._size <= 45) {
+                return 3;
+            }
+            if (this._size >= 46 && this._size <= 55) {
+                return 4;
+            }
+            return 5;
         }
 
         public _resetStageText():void {

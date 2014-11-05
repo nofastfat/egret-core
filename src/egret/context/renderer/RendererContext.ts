@@ -143,7 +143,7 @@ module egret {
          * @param y {number}
          * @param maxWidth {numbe}
          */
-        public drawText(textField:egret.TextField, text:string, x:number, y:number, maxWidth:number) {
+        public _drawText(textField:egret.TextField, text:string, x:number, y:number, maxWidth:number, style:Object) {
             Profiler.getInstance().onDrawImage();
         }
 

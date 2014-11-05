@@ -65,7 +65,14 @@ module egret {
         public _setType(value:string):void {
             if (this._type != value) {
                 this._type = value;
-                if (this._type == TextFieldType.INPUT) {
+                if (this._type == TextFieldType.INPUT) {//input，如果没有设置过宽高，则设置默认值为100，30
+                    if (!this._hasWidthSet) {
+                        this._setWidth(100);
+                    }
+                    if (!this._hasHeightSet) {
+                        this._setHeight(30);
+                    }
+
                     //创建stageText
                     if (this._inputUtils == null) {
                         this._inputUtils = new egret.InputController();
@@ -90,8 +97,6 @@ module egret {
         public get type():string {
             return this._type;
         }
-
-        public _drawText:string;
 
         public get text():string {
             return this._getText();
@@ -142,7 +147,7 @@ module egret {
                     text = this._text;
                 }
 
-                this._drawText = text;
+                this._setMiddleStyle([[text]]);
             }
         }
 
@@ -443,7 +448,7 @@ module egret {
          * 表示字段是否为多行文本字段。
          * 如果值为 true，则文本字段为多行文本字段；如果值为 false，则文本字段为单行文本字段。在类型为 TextFieldType.INPUT 的字段中，multiline 值将确定 Enter 键是否创建新行（如果值为 false，则将忽略 Enter 键）。
          * 默认值为 false。
-         * @member {number} egret.TextField#multiline
+         * @member {boolean} egret.TextField#multiline
          */
         public _multiline:boolean = false;
         public set multiline(value:boolean) {
@@ -521,6 +526,116 @@ module egret {
             return this.drawText(renderContext, true);
         }
 
+        private _textArr:Array<any> = [];
+        /**
+         *
+         * @param textArr [["text1", {"color":0xffffff, "size":20}], ["text2", {"color":0xff0000, "size":20}]]
+         * @private
+         */
+        public _setTextArray(text2Arr:Array<any>):void {
+            var text:string = "";
+            for (var i:number = 0; i < text2Arr.length; i++) {
+                text += text2Arr[i][0];
+                text2Arr[i][0] = this.changeToPassText(text2Arr[i][0]);
+            }
+            this._text = text;
+            this._setMiddleStyle(text2Arr);
+        }
+
+        private changeToPassText(text:string):string {
+            if (this._displayAsPassword) {
+                var passText:string = "";
+                for (var i:number = 0, num = text.length; i < num; i++) {
+                    switch (text.charAt(i)) {
+                        case '\n' :
+                            passText += "\n";
+                            break;
+                        case '\r' :
+                            break;
+                        default :
+                            passText += '*';
+                    }
+                }
+                return passText;
+            }
+            return text;
+        }
+
+        private _setMiddleStyle(text2Arr:Array<any>):void {
+            this._textArr = text2Arr;
+        }
+
+        private getLinesArr():Array<any> {
+            var text2Arr:Array<any> = this._textArr;
+
+            var renderContext = egret.MainContext.instance.rendererContext;
+
+            var linesArr:Array<any> = [];
+            var lineW:number = 0;
+            var lineH:number = 0;
+            var lineCount:number = 0;
+            for (var i:number = 0; i < text2Arr.length; i++) {
+                var textInfo:Array<any> = text2Arr[i];
+                textInfo[1] = textInfo[1] || {};
+                lineH = Math.max(lineH, textInfo[1]["size"] || this._size);
+                var text:string = textInfo[0];
+                var textArr:Array<any> = text.split(/(?:\r\n|\r|\n)/);
+
+                for (var j:number = 0; j < textArr.length; j++) {
+                    if (linesArr[lineCount] == null) {
+                        linesArr[lineCount] = [];
+                        lineW = 0;
+                    }
+
+                    renderContext.setupFont(this);
+                    var w:number = renderContext.measureText(textArr[j]);
+                    if (!this._hasWidthSet) {//没有设置过宽
+                        lineW = w;
+
+                        linesArr[lineCount].push([textArr[j], textInfo[1], w]);
+                    }
+                    else {
+                        if (lineW + w < this._explicitWidth) {//在设置范围内
+                            linesArr[lineCount].push([textArr[j], textInfo[1], w]);
+                            lineW += w;
+                        }
+                        else {
+                            var k:number = 0;
+                            var ww:number = 0;
+                            var word:string = textArr[j];
+                            for (; k < word.length; k++) {
+                                w = renderContext.measureText(word.charAt(k));
+                                if (lineW + w > this._explicitWidth) {
+                                    break;
+                                }
+                                ww += w;
+                                lineW += w;
+                            }
+                            if (k > 0) {
+                                linesArr[lineCount].push([word.substring(0, k), textInfo[1], ww]);
+                                textArr[j] = word.substring(k);
+                            }
+
+                            j--;
+                        }
+                    }
+                    if (j < textArr.length - 1) {//非最后一个
+                        linesArr[lineCount].push([lineW, lineH]);
+                        if (!this._multiline) {
+                            return linesArr;
+                        }
+                        lineCount++;
+                    }
+                }
+
+                if (i == text2Arr.length - 1) {
+                    linesArr[lineCount].push([lineW, lineH]);
+                }
+            }
+
+            return linesArr;
+        }
+
         /**
          * @private
          * @param renderContext
@@ -528,15 +643,29 @@ module egret {
          */
         private drawText(renderContext:RendererContext, forMeasure:boolean):Rectangle {
 
-            var lines:Array<string> = this.getTextLines(renderContext);
+            var lines:Array<any> = this.getLinesArr();
+            renderContext.setupFont(this);
+
             if (!lines) {
                 return Rectangle.identity.initialize(0, 0, 0, 0);
             }
             var length:number = lines.length;
             var drawY:number = this._size * 0.5;
-            var hGap:number = this._size + this._lineSpacing;
-            var textHeight:number = length * hGap - this._lineSpacing;
+
+            var textHeight:number = 0;
+            var maxWidth:number = 0;
+            for (var i:number = 0; i < lines.length; i++) {
+                var lineArr:Array<any> = lines[i];
+                textHeight += lineArr[lineArr.length - 1][1];
+                maxWidth = Math.max(lineArr[lineArr.length - 1][0], maxWidth);
+            }
+            textHeight += (length - 1) * this._lineSpacing;
             this._textHeight = textHeight;
+
+            if (this._hasWidthSet) {
+                maxWidth = this._explicitWidth;
+            }
+
             var explicitHeight:number = this._hasHeightSet?this._explicitHeight:Number.POSITIVE_INFINITY;
             if (this._hasHeightSet&&textHeight < explicitHeight) {
                 var valign:number = 0;
@@ -555,27 +684,24 @@ module egret {
             else if (this._textAlign == HorizontalAlign.RIGHT) {
                 halign = 1;
             }
-            var measuredWidths = this.measuredWidths;
-            var maxWidth:number;
-            if (this._hasWidthSet) {
-                maxWidth = this._explicitWidth;
-            }
-            else {
-                maxWidth = this._textWidth;
-            }
+
             var minX:number = Number.POSITIVE_INFINITY;
-            for (var i:number = 0; i < length; i++) {
-                var line:string = lines[i];
-                var measureW:number = measuredWidths[i];
-                var drawX:number = Math.round((maxWidth - measureW) * halign);
-                if (drawX < minX) {
-                    minX = drawX;
+            var drawX:number = 0;
+            for (var i = 0; i < length; i++) {
+                var lineArr:Array<any> = lines[i];
+                drawX = Math.round((maxWidth - lineArr[lineArr.length - 1][0]) * halign);
+
+                minX = Math.min(minX, drawX);
+
+                for (var j:number = 0; j < lineArr.length - 1; j++) {
+                    if (!forMeasure) {
+                        renderContext._drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], lineArr[j][1]);
+                    }
+                    drawX += lineArr[j][2];
                 }
-                if (!forMeasure && drawY < explicitHeight) {
-                    renderContext.drawText(this, line, drawX, drawY, maxWidth);
-                }
-                drawY += hGap;
+                drawY += lineArr[lineArr.length - 1][1] + this._lineSpacing;
             }
+
             return Rectangle.identity.initialize(minX, minY, maxWidth, textHeight);
         }
 
@@ -583,78 +709,5 @@ module egret {
         private _textHeight:number;
         private measuredWidths:Array<number> = [];
 
-        private getTextLines(renderContext:RendererContext):Array<string>{
-            var text:string = this._drawText ? this._drawText.toString() : "";
-            if(!text){
-                return null;
-            }
-            var measuredWidths = this.measuredWidths;
-            measuredWidths.length = 0;
-            renderContext.setupFont(this);
-            var lines:Array<string> = text.split(/(?:\r\n|\r|\n)/);
-            var length:number = lines.length;
-            var maxWidth:number = 0;
-            if (this._hasWidthSet) {
-                var explicitWidth:number = this._explicitWidth;
-                for (var i:number = 0; i < length; i++) {
-                    var line:string = lines[i];
-                    var measureW:number = renderContext.measureText(line);
-                    if (measureW > explicitWidth) {
-                        var newLine:string = "";
-                        var lineWidth:number = 0;
-                        var len:number = line.length;
-                        for (var j:number = 0; j < len; j++) {
-                            var word:string = line.charAt(j);
-                            measureW = renderContext.measureText(word);
-                            if(lineWidth+measureW>explicitWidth){
-
-                                if(lineWidth==0){
-                                    lines.splice(i,0,word);
-                                    measuredWidths[i] = measureW;
-                                    if (maxWidth < measureW) {
-                                        maxWidth = measureW;
-                                    }
-                                    measureW = 0;
-                                    word = "";
-                                }
-                                else {
-                                    lines.splice(i, 0, newLine);
-                                    measuredWidths[i] = lineWidth;
-                                    if (maxWidth < lineWidth) {
-                                        maxWidth = lineWidth;
-                                    }
-                                    newLine = "";
-                                    lineWidth = 0;
-                                }
-                                i++;
-                                length++;
-                            }
-                            lineWidth += measureW;
-                            newLine += word;
-                        }
-                        lines[i]=newLine;
-                        measuredWidths[i] = lineWidth;
-                    }
-                    else {
-                        measuredWidths[i] = measureW;
-                        if (maxWidth < measureW) {
-                            maxWidth = measureW;
-                        }
-                    }
-                }
-            }
-            else {
-                for (i = 0; i < length; i++) {
-                    line = lines[i];
-                    measureW = renderContext.measureText(line);
-                    measuredWidths[i] = measureW;
-                    if (maxWidth < measureW) {
-                        maxWidth = measureW;
-                    }
-                }
-            }
-            this._textWidth = maxWidth;
-            return lines;
-        }
     }
 }
