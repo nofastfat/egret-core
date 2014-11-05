@@ -689,13 +689,23 @@ module egret {
             var drawX:number = 0;
             for (var i = 0; i < length; i++) {
                 var lineArr:Array<any> = lines[i];
+
+                if (i != 0 && this._hasHeightSet && drawY + lineArr[lineArr.length - 1][1] > this._explicitHeight) {
+                    break;
+                }
+
                 drawX = Math.round((maxWidth - lineArr[lineArr.length - 1][0]) * halign);
 
                 minX = Math.min(minX, drawX);
 
                 for (var j:number = 0; j < lineArr.length - 1; j++) {
                     if (!forMeasure) {
-                        renderContext._drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], lineArr[j][1]);
+                        if (this._type == egret.TextFieldType.INPUT) {
+                            renderContext._drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], {});
+                        }
+                        else {
+                            renderContext._drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], lineArr[j][1]);
+                        }
                     }
                     drawX += lineArr[j][2];
                 }
