@@ -609,7 +609,7 @@ module egret {
                 var textInfo:Array<any> = text2Arr[i];
                 textInfo[1] = textInfo[1] || {};
                 lineH = Math.max(lineH, textInfo[1]["size"] || this._size);
-                var text:string = textInfo[0];
+                var text:string = textInfo[0].toString();
                 var textArr:Array<any> = text.split(/(?:\r\n|\r|\n)/);
 
                 for (var j:number = 0; j < textArr.length; j++) {
