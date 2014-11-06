@@ -52,8 +52,8 @@ module egret {
             this.stageText.addEventListener("blur", this.onBlurHandler, this);
             this.stageText.addEventListener("focus", this.onFocusHandler, this);
             this.stageText.addEventListener("updateText", this.updateTextHandler, this);
-            this._text.addEventListener(egret.TouchEvent.TOUCH_BEGIN, this.onMouseDownHandler, this);
-            egret.MainContext.instance.stage.addEventListener(egret.TouchEvent.TOUCH_BEGIN, this.onStageDownHandler, this);
+            this._text.addEventListener(egret.TouchEvent.TOUCH_TAP, this.onMouseDownHandler, this);
+            egret.MainContext.instance.stage.addEventListener(egret.TouchEvent.TOUCH_TAP, this.onStageDownHandler, this);
         }
 
         public _removeStageText():void {
@@ -67,8 +67,8 @@ module egret {
             this.stageText.removeEventListener("blur", this.onBlurHandler, this);
             this.stageText.removeEventListener("focus", this.onFocusHandler, this);
             this.stageText.removeEventListener("updateText", this.updateTextHandler, this);
-            this._text.removeEventListener(egret.TouchEvent.TOUCH_BEGIN, this.onMouseDownHandler, this);
-            egret.MainContext.instance.stage.removeEventListener(egret.TouchEvent.TOUCH_BEGIN, this.onStageDownHandler, this);
+            this._text.removeEventListener(egret.TouchEvent.TOUCH_TAP, this.onMouseDownHandler, this);
+            egret.MainContext.instance.stage.removeEventListener(egret.TouchEvent.TOUCH_TAP, this.onStageDownHandler, this);
         }
 
         public _getText():string {
