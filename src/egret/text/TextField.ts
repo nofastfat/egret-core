@@ -691,7 +691,6 @@ module egret {
                 maxWidth = Math.max(lineArr[lineArr.length - 1][0], maxWidth);
             }
             textHeight += (length - 1) * this._lineSpacing;
-            this._textHeight = textHeight;
 
             if (this._hasWidthSet) {
                 maxWidth = this._explicitWidth;
@@ -707,7 +706,6 @@ module egret {
                 drawY += valign * (explicitHeight - textHeight);
             }
             drawY = Math.round(drawY);
-            var minY:number = drawY;
             var halign:number = 0;
             if (this._textAlign == HorizontalAlign.CENTER) {
                 halign = 0.5;
@@ -716,14 +714,11 @@ module egret {
                 halign = 1;
             }
 
-            var minX:number = Number.POSITIVE_INFINITY;
             var drawX:number = 0;
             for (var i = 0; i < length; i++) {
                 var lineArr:Array<any> = lines[i];
 
                 drawX = Math.round((maxWidth - lineArr[lineArr.length - 1][0]) * halign);
-
-                minX = Math.min(minX, drawX);
 
                 for (var j:number = 0; j < lineArr.length - 1; j++) {
                     if (!forMeasure) {
@@ -743,12 +738,7 @@ module egret {
                 }
             }
 
-            return Rectangle.identity.initialize(minX, minY, maxWidth, textHeight);
+            return Rectangle.identity.initialize(0, 0, maxWidth, textHeight);
         }
-
-        private _textWidth:number;
-        private _textHeight:number;
-        private measuredWidths:Array<number> = [];
-
     }
 }
