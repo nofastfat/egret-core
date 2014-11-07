@@ -116,7 +116,6 @@ module egret {
 
         private hideText():void {
             if (!this._isFocus) {
-//                this._text.visible = false;
                 this._text._setBaseText("");
                 this._isFocus = true;
             }
@@ -124,10 +123,11 @@ module egret {
 
         private updateTextHandler(event):void {
             this.resetText();
+            //抛出change事件
+            this._text.dispatchEvent(new egret.Event(egret.Event.CHANGE));
         }
 
         private resetText():void {
-//            this._text.visible = true;
             this._text._setBaseText(this.stageText._getText());
         }
 
