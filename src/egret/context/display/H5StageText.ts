@@ -38,14 +38,12 @@ module egret {
         private div:any;
         private inputElement:any;
 
-        private static DIV;
-        private static INPUT;
-        private static Shape:egret.Shape;
+        private _shape:egret.Shape;
 
         constructor() {
             super();
 
-            if (H5StageText.DIV == null) {
+//            if (H5StageText.DIV == null) {
                 var scaleX = egret.StageDelegate.getInstance().getScaleX();
                 var scaleY = egret.StageDelegate.getInstance().getScaleY();
 
@@ -57,7 +55,6 @@ module egret {
                 div.transforms();
                 div.style[egret_dom.getTrans("transformOrigin")] = "0% 0% 0px";
                 this.div = div;
-                H5StageText.DIV = div;
 
                 var inputElement = document.createElement("textarea");
                 inputElement.type = "text";
@@ -65,7 +62,7 @@ module egret {
                 this.inputElement = inputElement;
                 this.inputElement.value = "";
 
-                H5StageText.INPUT = this.inputElement;
+//                H5StageText.INPUT = this.inputElement;
                 div.appendChild(inputElement);
 
                 //修改属性
@@ -106,12 +103,10 @@ module egret {
                 shape.height = stageHeight;
                 shape.touchEnabled = true;
 
-                H5StageText.Shape = shape;
-            }
+                this._shape = shape;
+//            }
 
-            this.div = H5StageText.DIV;
-            this.inputElement = H5StageText.INPUT;
-            this.getStageDelegateDiv().appendChild(H5StageText.DIV);
+            this.getStageDelegateDiv().appendChild(this.div);
         }
 
         private getStageDelegateDiv():any {
@@ -119,7 +114,6 @@ module egret {
             if (!stageDelegateDiv) {
                 stageDelegateDiv = egret.Browser.getInstance().$new("div");
                 stageDelegateDiv.id = "StageDelegateDiv";
-//                stageDelegateDiv.style.pointerEvents = "none";
 //                stageDelegateDiv.style.position = "absolute";
                 var container = document.getElementById(egret.StageDelegate.canvas_div_name);
                 container.appendChild(stageDelegateDiv);
@@ -140,10 +134,23 @@ module egret {
             this.inputElement.setAttribute("maxlength", this._maxChars > 0 ? this._maxChars : -1);
         }
 
+        public changePosition(x:number, y:number):void {
+            if (this._isShow) {
+                var scaleX = egret.StageDelegate.getInstance().getScaleX();
+                var scaleY = egret.StageDelegate.getInstance().getScaleY();
+
+                this.div.position.x = 0;//x * scaleX;
+                this.div.position.y = y * scaleY;
+                this.div.transforms();
+            }
+        }
+
+        private _isShow:boolean = false;
         /**
          * @method egret.StageText#add
          */
         public _show():void {
+            this._isShow = true;
             if (this._multiline
                 && egret.MainContext.instance.stage.stageWidth * 5 < egret.MainContext.instance.stage.stageHeight * 4) {
                 this.setElementStyle("height", 110 + "px");
@@ -164,12 +171,13 @@ module egret {
             this.inputElement.selectionEnd = txt.length;
             this.inputElement.focus();
 
-            if (H5StageText.Shape && H5StageText.Shape.parent == null) {
-                egret.MainContext.instance.stage.addChild(H5StageText.Shape);
+            if (this._shape && this._shape.parent == null) {
+                egret.MainContext.instance.stage.addChild(this._shape);
             }
         }
 
         public _hide():void {
+            this._isShow = false;
             this.inputElement.oninput = function () {
             };
             this.setElementStyle("border", "none");
@@ -178,8 +186,10 @@ module egret {
             this.setElementStyle("height", 0 + "px");
             this.inputElement.blur();
 
-            if (H5StageText.Shape && H5StageText.Shape.parent) {
-                H5StageText.Shape.parent.removeChild(H5StageText.Shape);
+            window.scrollTo(0, 0);
+
+            if (this._shape && this._shape.parent) {
+                this._shape.parent.removeChild(this._shape);
             }
         }
 
@@ -187,8 +197,8 @@ module egret {
          * @method egret.StageText#remove
          */
         public _remove():void {
-            if (H5StageText.Shape && H5StageText.Shape.parent) {
-                H5StageText.Shape.parent.removeChild(H5StageText.Shape);
+            if (this._shape && this._shape.parent) {
+                this._shape.parent.removeChild(this._shape);
             }
         }
 
@@ -222,10 +232,10 @@ module egret {
         private _styleInfoes:Object = {};
         private setElementStyle(style:string, value:any):void {
             if (this.inputElement) {
-//                if (this._styleInfoes[style] != value) {
+                if (this._styleInfoes[style] != value) {
                     this.inputElement.style[style] = value;
-//                    this._styleInfoes[style] = value;
-//                }
+                    this._styleInfoes[style] = value;
+                }
             }
         }
     }
