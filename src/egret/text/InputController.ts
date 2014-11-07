@@ -173,9 +173,9 @@ module egret {
                 this.stageText._setVisible(visible);
             }
 
+            this.stageText._setMultiline(this._text._multiline);
             this.stageText._setMaxChars(this._text._maxChars);
 
-            this.stageText._setMultiline(this._text._multiline);
             this.stageText._setSize(this._text._size);
             this.stageText._setTextColor(this._text._textColorString);
             this.stageText._setTextFontFamily(this._text._fontFamily);
