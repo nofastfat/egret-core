@@ -5,6 +5,7 @@
 var path = require("path");
 var plist = require('../core/plist');
 var file = require("../core/file");
+var fs = require("fs");
 
 function run(currDir, args, opts) {
     if (args[0]) {
@@ -13,7 +14,7 @@ function run(currDir, args, opts) {
     linkChildren(currDir);
 }
 
-
+var currentFileUrl = "";
 function linkChildren(fileUrl) {
     if (file.isDirectory(fileUrl)) {
         var fileList = file.getDirectoryListing(fileUrl, true);
@@ -39,7 +40,7 @@ function linkChildren(fileUrl) {
 
         return;
     }
-
+    currentFileUrl = fileUrl;
     var fileName = file.getFileName(fileUrl);
     var dbData = {"armature":[], "version":2.3, "name" : fileName, "frameRate":60};
 
@@ -70,19 +71,17 @@ function linkChildren(fileUrl) {
 
 
 
-//    moveResources(fileUrl, stuData["texture_data"]);
+    moveResources(fileUrl, stuData["texture_data"]);
 }
 
 function moveResources(fileUrl, resources) {
     var fileName = file.getFileName(fileUrl);
     var filePath = fileUrl.substring(0, fileUrl.lastIndexOf(fileName));
 
-
-
     for (var i = 0; i < resources.length; i++) {
         var name = resources[i]["name"];
 
-        file.copy(path.join(filePath, "..", "Resources", name + ".png"), path.join(filePath, fileName, name));
+        file.copy(path.join(filePath, "..", "Resources", name + ".png"), path.join(filePath, fileName, name + ".png"));
     }
 }
 
@@ -134,17 +133,21 @@ function radianToAngle(radian) {
     return radian * 180 / Math.PI;
 }
 
-function setBone(dbBones, stuBones) {
-    var tempBones = {};
 
+var bones = {};
+function setBone(dbBones, stuBones) {
+
+    var maxIdx = 0;
     //层级父子数组
     for (var i = 0; i < stuBones.length; i++) {
         var stuBone = stuBones[i];
 
         var dbBone = {"transform":{}};
-        dbBones.push(dbBone);
-
+        //dbBones.push(dbBone);
+        dbBones[stuBone["z"]] = dbBone;
+        maxIdx = Math.max(maxIdx, stuBone["z"]);
         dbBone["name"] = stuBone["name"];
+        //dbBone["z"] = stuBone["z"];
 
         if (stuBone["parent"] != null && stuBone["parent"] != "") {
             dbBone["parent"] = stuBone["parent"];
@@ -155,27 +158,55 @@ function setBone(dbBones, stuBones) {
         dbBone["transform"]["x"] = stuBone["x"];
         dbBone["transform"]["y"] = -stuBone["y"];
         dbBone["transform"]["skX"] = radianToAngle(stuBone["kX"]);
-        dbBone["transform"]["skY"] = radianToAngle(stuBone["kY"]);
+        dbBone["transform"]["skY"] = -radianToAngle(stuBone["kY"]);
         dbBone["transform"]["scX"] = stuBone["cX"];
         dbBone["transform"]["scY"] = stuBone["cY"];
 
-        tempBones[stuBone["name"]] = dbBone;
+        dbBone["matrix"] = [dbBone["transform"]["x"], dbBone["transform"]["y"],
+            dbBone["transform"]["scX"], dbBone["transform"]["scY"],
+            0, dbBone["transform"]["skX"], dbBone["transform"]["skY"], 0, 0];
+
+        bones[stuBone["name"]] = dbBone;
+    }
+
+    for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
+        if (dbBones[i] == null) {
+            dbBones.splice(i, 1);
+            i--;
+            continue;
+        }
+        dbBones[i]["z"] = i;
     }
 
     resortLayers();
-    console.log(resultArr);
 
     for (var i = 0; i < resultArr.length; i++) {
         var nodeName = resultArr[i];
 
-        var bone = tempBones[nodeName];
-        if (bone["parent"] == null || bone["parent"] == "") {
+        var bone = bones[nodeName];
+        if (bone["parent"] == null) {
             continue;
         }
 
-        var parentBone = tempBones[bone["parent"]];
-        bone["transform"]["x"] += parentBone["transform"]["x"];
-        bone["transform"]["y"] += parentBone["transform"]["y"];
+        var parentBone = bones[bone["parent"]];
+
+        var matrix = new Matrix();
+        var o = bone;
+        while (o != null) {
+            var temp = o["matrix"];
+            matrix.prependTransform(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], 0, 0);
+
+            if (o["parent"] != null) {
+                o = bones[o["parent"]];
+            }
+            else {
+                break;
+            }
+        }
+        matrix.append(1, 0, 0, 1, 0, 0);
+
+        bone["transform"]["x"] = matrix["tx"];
+        bone["transform"]["y"] = matrix["ty"];
         bone["transform"]["scX"] *= parentBone["transform"]["scX"];
         bone["transform"]["scY"] *= parentBone["transform"]["scY"];
         bone["transform"]["skX"] += parentBone["transform"]["skX"];
@@ -184,20 +215,31 @@ function setBone(dbBones, stuBones) {
 }
 
 function setSlot(dbSlots, stuSlots) {
+    var maxIdx = 0;
     for (var i = 0; i < stuSlots.length; i++) {
         var stuSlot = stuSlots[i];
 
         var dbSlot = {};
-        dbSlots.push(dbSlot);
+        dbSlots[bones[stuSlot["name"]]["z"]] = dbSlot;
+        maxIdx = Math.max(maxIdx, bones[stuSlot["name"]]["z"]);
 
         dbSlot["blendMode"] = "normal";
-        dbSlot["z"] = i;
+        dbSlot["z"] = bones[stuSlot["name"]]["z"];
         dbSlot["name"] = stuSlot["name"];
         dbSlot["parent"] = stuSlot["name"];
 
         dbSlot["display"] = [];
 
         setDisplay(dbSlot["display"], stuSlot["display_data"]);
+    }
+
+    for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
+        if (dbSlots[i] == null) {
+            dbSlots.splice(i, 1);
+            i--;
+            continue;
+        }
+        dbSlots[i]["z"] = i;
     }
 }
 
@@ -208,17 +250,23 @@ function setDisplay(dbDisplays, stuDisplays) {
         var dbDisplay = {"transform":{}};
         dbDisplays.push(dbDisplay);
 
+
+        var fileName = file.getFileName(currentFileUrl);
+        var currentPath = currentFileUrl.substring(0, currentFileUrl.lastIndexOf(fileName));
+        console.log (path.join(currentPath, "..", "Resources", stuDisplay["name"]));
+        var info = fs.lstatSync(path.join(currentPath, "..", "Resources", stuDisplay["name"]));
+        console.log(info);
+
         dbDisplay["name"] = stuDisplay["name"];
         dbDisplay["type"] = stuDisplay["displayType"] == 0 ? "image" : "image";
-        dbDisplay["transform"]["x"] = 0;//stuDisplay[0]["x"];
-        dbDisplay["transform"]["y"] = 0;//-stuDisplay[0]["y"];
-        dbDisplay["transform"]["pX"] = stuDisplay["skin_data"][0]["x"];
-        dbDisplay["transform"]["pY"] = -stuDisplay["skin_data"][0]["y"];
+        dbDisplay["transform"]["x"] = stuDisplay["skin_data"][0]["x"];
+        dbDisplay["transform"]["y"] = -stuDisplay["skin_data"][0]["y"];
+        dbDisplay["transform"]["pX"] = 0.5;//stuDisplay["skin_data"][0]["x"];
+        dbDisplay["transform"]["pY"] = 0.5;//-stuDisplay["skin_data"][0]["y"];
         dbDisplay["transform"]["skX"] = radianToAngle(stuDisplay["skin_data"][0]["kX"]);
-        dbDisplay["transform"]["skY"] = radianToAngle(stuDisplay["skin_data"][0]["kY"]);
+        dbDisplay["transform"]["skY"] = -radianToAngle(stuDisplay["skin_data"][0]["kY"]);
         dbDisplay["transform"]["scX"] = stuDisplay["skin_data"][0]["cX"];
         dbDisplay["transform"]["scY"] = stuDisplay["skin_data"][0]["cY"];
-
     }
 }
 
@@ -241,33 +289,141 @@ function setAnimation(dbAnimations, stuAnimations) {
     }
 }
 
+var timelines = {};
+var count = 0;
 function setTimeline(dbTimelines, stuTimelines) {
+    count++;
+
+    timelines = {};
+    var maxIdx = 0;
     for (var i = 0; i < stuTimelines.length; i++) {
         var stuTimeline = stuTimelines[i];
 
         var dbTimeline = {};
-        dbTimelines.push(dbTimeline);
-
+        dbTimeline["name"] = stuTimeline["name"];
+        console.log(dbTimeline["name"] + "_" +bones[stuTimeline["name"]]["z"])
+        dbTimelines[bones[stuTimeline["name"]]["z"]] = dbTimeline;
+        maxIdx = Math.max(maxIdx, bones[stuTimeline["name"]]["z"]);
         dbTimeline["offset"] = 0;
         dbTimeline["scale"] = 1;
-        dbTimeline["name"] = stuTimeline["name"];
 
         dbTimeline["frame"] = [];
 
-        setFrame(dbTimeline["frame"], stuTimeline["frame_data"]);
+        timelines[dbTimeline["name"]] = dbTimeline;
+
+        setFrame(dbTimeline["frame"], stuTimeline["frame_data"], bones[dbTimeline["name"]], i);
     }
+
+
+    for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
+        if (dbTimelines[i] == null) {
+            dbTimelines.splice(i, 1);
+            i--;
+            continue;
+        }
+        var frames = dbTimelines[i]["frame"];
+        for (var k = 0; k < frames.length; k++) {
+            frames[k]["z"] = i;
+        }
+    }
+
+
+    //
+    for (var i = 0; i < resultArr.length; i++) {
+        var name = resultArr[i];
+        var bone = bones[name];
+
+            var timeline = timelines[name];
+            if (timeline == null) {
+                continue;
+            }
+            var frameId = 0;
+
+            for (var j = 0; j < timeline["frame"].length; j++) {
+                var tempFrame = timeline["frame"][j];
+
+                if (tempFrame["displayIndex"] != -1) {
+                    var matrix = new Matrix();
+                    var o = tempFrame;
+                    var tempName = name;
+                    while (o != null) {
+                        var temp = o["matrix"];
+                        matrix.prependTransform(temp[0], temp[1], temp[2], temp[3], temp[4], temp[5], temp[6], 0, 0);
+
+                        if (bones[tempName]["parent"] != null) {
+                            o = getParentFrame(bones[tempName]["parent"], frameId);
+                            tempName = bones[tempName]["parent"];
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                    matrix.append(1, 0, 0, 1, 0, 0);
+                    tempFrame["transform"]["x"] = matrix["tx"];
+                    tempFrame["transform"]["y"] = matrix["ty"];
+                    tempFrame["transform"]["pX"] = 0.5;
+                    tempFrame["transform"]["pY"] = 0.5;
+
+                    if (bone["parent"] == null) {
+                        tempFrame["transform"]["scX"] = tempFrame["matrix"][2];
+                        tempFrame["transform"]["scY"] = tempFrame["matrix"][3];
+                        tempFrame["transform"]["skX"] = tempFrame["matrix"][5];
+                        tempFrame["transform"]["skY"] = tempFrame["matrix"][6];
+                    }
+                    else {
+                        var dbParentFrame = getParentFrame(bone["parent"], frameId);
+
+                        tempFrame["transform"]["scX"] = tempFrame["matrix"][2] * dbParentFrame["transform"]["scX"];
+                        tempFrame["transform"]["scY"] = tempFrame["matrix"][3] * dbParentFrame["transform"]["scY"];
+                        tempFrame["transform"]["skX"] = tempFrame["matrix"][5] + dbParentFrame["transform"]["skX"];
+                        tempFrame["transform"]["skY"] = tempFrame["matrix"][6] + dbParentFrame["transform"]["skY"];
+                    }
+                }
+
+                frameId += tempFrame["duration"];
+            }
+    }
+
+
 }
 
-function setFrame(dbFrames, stuFrames) {
+function getParentFrame(parent, frameId) {
+    var timeline = timelines[parent];
+
+    var tempFrameId = 0;
+    for (var i = 0; i < timeline["frame"].length; i++) {
+        if (tempFrameId >= frameId) {
+            return timeline["frame"][i];
+        }
+        tempFrameId += timeline["frame"][i]["duration"];
+    }
+
+    return {};
+}
+
+function setFrame(dbFrames, stuFrames, bone, z) {
+
     for (var i = 0; i < stuFrames.length; i++) {
         var stuFrame = stuFrames[i];
+        var dbFrame = {};
 
-        var dbFrame = {"transform":{}};
+        if (i == 0) {
+            var startIdx = stuFrame["fi"];
+
+            if (startIdx != 0) {
+                var temp = {"duration" : startIdx, "displayIndex" : -1};
+                dbFrames.push(temp);
+            }
+        }
+
+        if (stuFrame["dI"] > 0) {
+            dbFrame["displayIndex"] = stuFrame["dI"];
+        }
+        else if (stuFrame["dI"] == -1000) {
+            dbFrame["hide"] = 1;
+        }
+
         dbFrames.push(dbFrame);
-
-        dbFrame["z"] = stuFrame["z"];
-        dbFrame["tweenEasing"] = stuFrame["twE"];
-
         if (i < stuFrames.length - 1) {
             var nextFrame = stuFrames[i + 1];
             dbFrame["duration"] = nextFrame["fi"] - stuFrame["fi"];
@@ -276,17 +432,110 @@ function setFrame(dbFrames, stuFrames) {
             dbFrame["duration"] = 1;
         }
 
-        dbFrame["transform"]["x"] = stuFrame["x"];
-        dbFrame["transform"]["y"] = -stuFrame["y"];
-        dbFrame["transform"]["pX"] = 0.5;//stuFrame[0]["x"];
-        dbFrame["transform"]["pY"] = 0.5;//-stuFrame[0]["y"];
-        dbFrame["transform"]["skX"] = radianToAngle(stuFrame["kX"]);
-        dbFrame["transform"]["skY"] = radianToAngle(stuFrame["kY"]);
-        dbFrame["transform"]["scX"] = stuFrame["cX"];
-        dbFrame["transform"]["scY"] = stuFrame["cY"];
+        if (stuFrame["evt"]) {
+            dbFrame["event"] = stuFrame["evt"];
+        }
+
+
+        dbFrame["z"] = z;//stuFrame["z"];
+        dbFrame["tweenEasing"] = stuFrame["twE"];
+
+            if (stuFrame["color"]) {
+                dbFrame["colorTransform"] = {};
+                dbFrame["colorTransform"]["a0"] = stuFrame["color"]["a"];
+                dbFrame["colorTransform"]["r0"] = stuFrame["color"]["r"];
+                dbFrame["colorTransform"]["g0"] = stuFrame["color"]["g"];
+                dbFrame["colorTransform"]["b0"] = stuFrame["color"]["b"];
+                dbFrame["colorTransform"]["aM"] = 0;
+                dbFrame["colorTransform"]["rM"] = 0;
+                dbFrame["colorTransform"]["gM"] = 0;
+                dbFrame["colorTransform"]["bM"] = 0;
+            }
+
+        dbFrame["transform"] = {};
+
+        var matrix = bone["matrix"];
+        dbFrame["matrix"] = [stuFrame["x"] + matrix[0],
+                             -stuFrame["y"] + matrix[1],
+                stuFrame["cX"] * matrix[2],
+                stuFrame["cY"] * matrix[3],
+                             0,
+                radianToAngle(stuFrame["kX"]) + matrix[5],
+                -radianToAngle(stuFrame["kY"]) + matrix[6], 0, 0];
 
     }
 }
+
+
+var Matrix = function(){
+    this.a = 1;
+    this.b = 0;
+    this.c = 0;
+    this.d = 1;
+    this.tx = 0;
+    this.ty = 0;
+}
+Matrix.DEG_TO_RAD = Math.PI / 180;
+Matrix.prototype.prependTransform = function (x, y, scaleX, scaleY, rotation, skewX, skewY, regX, regY) {
+    if (rotation % 360) {
+        var r = rotation * Matrix.DEG_TO_RAD;
+        var cos = Math.cos(r);
+        var sin = Math.sin(r);
+    } else {
+        cos = 1;
+        sin = 0;
+    }
+
+    if (regX || regY) {
+        // append the registration offset:
+        this.tx -= regX;
+        this.ty -= regY;
+    }
+    if (skewX || skewY) {
+        // TODO: can this be combined into a single prepend operation?
+        skewX *= Matrix.DEG_TO_RAD;
+        skewY *= Matrix.DEG_TO_RAD;
+        this.prepend(cos * scaleX, sin * scaleX, -sin * scaleY, cos * scaleY, 0, 0);
+        this.prepend(Math.cos(skewY), Math.sin(skewY), -Math.sin(skewX), Math.cos(skewX), x, y);
+    } else {
+        this.prepend(cos * scaleX, sin * scaleX, -sin * scaleY, cos * scaleY, x, y);
+    }
+    return this;
+};
+
+Matrix.prototype.prepend = function (a, b, c, d, tx, ty) {
+    var tx1 = this.tx;
+    if (a != 1 || b != 0 || c != 0 || d != 1) {
+        var a1 = this.a;
+        var c1 = this.c;
+        this.a = a1 * a + this.b * c;
+        this.b = a1 * b + this.b * d;
+        this.c = c1 * a + this.d * c;
+        this.d = c1 * b + this.d * d;
+    }
+    this.tx = tx1 * a + this.ty * c + tx;
+    this.ty = tx1 * b + this.ty * d + ty;
+    return this;
+};
+
+
+Matrix.prototype.append = function (a, b, c, d, tx, ty) {
+    var tx1 = this.tx;
+    if (a != 1 || b != 0 || c != 0 || d != 1) {
+        var a1 = this.a;
+        var c1 = this.c;
+        this.a = a1 * a + this.b * c;
+        this.b = a1 * b + this.b * d;
+        this.c = c1 * a + this.d * c;
+        this.d = c1 * b + this.d * d;
+    }
+    this.tx = tx1 * a + this.ty * c + tx;
+    this.ty = tx1 * b + this.ty * d + ty;
+    return this;
+};
+
+
+
 
 
 exports.run = run;
