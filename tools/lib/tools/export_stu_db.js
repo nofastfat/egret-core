@@ -104,7 +104,7 @@ var resultArr = [];
 function resortLayers() {
     var tempArr = [];
     for (var name in layersInfo) {
-        tempArr.push({"name" : name, "children" : layersInfo[name]});
+        tempArr.push({"name" : name, "children" : layersInfo[name].concat([])});
     }
 
     while (tempArr.length > 0) {
@@ -251,11 +251,11 @@ function setDisplay(dbDisplays, stuDisplays) {
         dbDisplays.push(dbDisplay);
 
 
-        var fileName = file.getFileName(currentFileUrl);
-        var currentPath = currentFileUrl.substring(0, currentFileUrl.lastIndexOf(fileName));
-        console.log (path.join(currentPath, "..", "Resources", stuDisplay["name"]));
-        var info = fs.lstatSync(path.join(currentPath, "..", "Resources", stuDisplay["name"]));
-        console.log(info);
+//        var fileName = file.getFileName(currentFileUrl);
+//        var currentPath = currentFileUrl.substring(0, currentFileUrl.lastIndexOf(fileName));
+//        console.log (path.join(currentPath, "..", "Resources", stuDisplay["name"]));
+//        var info = fs.lstatSync(path.join(currentPath, "..", "Resources", stuDisplay["name"]));
+//        console.log(info);
 
         dbDisplay["name"] = stuDisplay["name"];
         dbDisplay["type"] = stuDisplay["displayType"] == 0 ? "image" : "image";
@@ -301,7 +301,6 @@ function setTimeline(dbTimelines, stuTimelines) {
 
         var dbTimeline = {};
         dbTimeline["name"] = stuTimeline["name"];
-        console.log(dbTimeline["name"] + "_" +bones[stuTimeline["name"]]["z"])
         dbTimelines[bones[stuTimeline["name"]]["z"]] = dbTimeline;
         maxIdx = Math.max(maxIdx, bones[stuTimeline["name"]]["z"]);
         dbTimeline["offset"] = 0;
@@ -314,7 +313,7 @@ function setTimeline(dbTimelines, stuTimelines) {
         setFrame(dbTimeline["frame"], stuTimeline["frame_data"], bones[dbTimeline["name"]], i);
     }
 
-
+    //设置层级
     for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
         if (dbTimelines[i] == null) {
             dbTimelines.splice(i, 1);
@@ -327,6 +326,38 @@ function setTimeline(dbTimelines, stuTimelines) {
         }
     }
 
+    //从子往外加帧
+    for (var i = 0; i < resultArr.length; i++) {
+        var childName = resultArr[resultArr.length - 1 - i];
+
+        if (bones[childName]["parent"]) {//存在父节点
+            var pFrames = timelines[bones[childName]["parent"]]["frame"];
+            var cFrames = timelines[childName]["frame"];
+
+            var tempFrameId = 0;
+            for (var j = 0; j < cFrames.length; j++) {
+                var cFrame = cFrames[j];
+                addFrame(pFrames, tempFrameId);
+                tempFrameId += cFrame["duration"];
+            }
+        }
+    }
+
+    //从父往外加帧
+    for (var i = 0; i < resultArr.length; i++) {
+        var pName = resultArr[i];
+        var children = layersInfo[pName];
+        var tempFrameId = 0;
+        var pFrames = timelines[pName]["frame"];
+        for (var j = 0; j < pFrames.length; j++) {
+            var pFrame = pFrames[j];
+            for (var k = 0; k < children.length; k++) {
+                var cFrames = timelines[children[k]]["frame"];
+                addFrame(cFrames, tempFrameId);
+            }
+            tempFrameId += pFrame["duration"];
+        }
+    }
 
     //
     for (var i = 0; i < resultArr.length; i++) {
@@ -384,7 +415,101 @@ function setTimeline(dbTimelines, stuTimelines) {
             }
     }
 
+}
 
+function addFrame(frames, frameId) {
+    var tempFrameId = 0;
+    for (var i = 0; i < frames.length; i++) {
+        var frame = frames[i];
+        if (tempFrameId == frameId) {
+            return;
+        }
+        else if (tempFrameId < frameId) {
+            tempFrameId += frame["duration"];
+            continue;
+        }
+
+        var lastFrame = frames[i - 1];
+        var nextFrame = frames[i];
+        var midFrame = clone(lastFrame, {});
+
+        var lastDu = frameId - (tempFrameId - lastFrame["duration"]);
+        var midDu = lastFrame["duration"] - lastDu;
+        lastFrame["duration"] = lastDu;
+        midFrame["duration"] = midDu;
+        delete midFrame["event"];
+
+        var per = lastDu / (lastDu + midDu);
+        if (lastFrame["colorTransform"] || nextFrame["colorTransform"]) {
+            midFrame["colorTransform"] = {};
+
+            midFrame["colorTransform"]["a0"] = getProperty(lastDu, nextFrame, ["colorTransform", "a0"], 255, per);
+            midFrame["colorTransform"]["r0"] = getProperty(lastDu, nextFrame, ["colorTransform", "r0"], 255, per);
+            midFrame["colorTransform"]["g0"] = getProperty(lastDu, nextFrame, ["colorTransform", "g0"], 255, per);
+            midFrame["colorTransform"]["b0"] = getProperty(lastDu, nextFrame, ["colorTransform", "b0"], 255, per);
+            midFrame["colorTransform"]["aM"] = 0;
+            midFrame["colorTransform"]["rM"] = 0;
+            midFrame["colorTransform"]["gM"] = 0;
+            midFrame["colorTransform"]["bM"] = 0;
+        }
+
+        midFrame["matrix"] = getMatrix(lastFrame["matrix"], nextFrame["matrix"], per);
+
+        frames.splice(i, 0, midFrame);
+        return;
+    }
+
+    var lastFrame = frames[frames.length - 1];
+    var midFrame = clone(lastFrame, {});
+    lastFrame["duration"] = frameId - (tempFrameId - 1);
+    delete midFrame["event"];
+
+    frames.push(midFrame);
+}
+
+function getMatrix(array1, array2, per) {
+    var array = [];
+    for (var i = 0; i < array1.length; i++) {
+        array.push(array1[i] + (array2[i] - array1[i]) * per);
+    }
+    return array;
+}
+
+function getProperty(last, next, keys, devalue, per) {
+    var lastObj = last;
+    for (var i = 0; i < keys.length; i++) {
+        if (lastObj[keys[i]] == null) {
+            lastObj = devalue;
+            break;
+        }
+        lastObj = lastObj[keys[i]];
+    }
+
+    var nextObj = next;
+    for (var i = 0; i < keys.length; i++) {
+        if (nextObj[keys[i]] == null) {
+            nextObj = devalue;
+            break;
+        }
+        nextObj = nextObj[keys[i]];
+    }
+
+    return lastObj + (nextObj - lastObj) * per;
+}
+
+function clone(frame, result) {
+    for (var key in frame) {
+        if (frame[key] instanceof Array) {
+            result[key] = clone(frame[key], []);
+        }
+        else if (frame[key] instanceof Object) {//
+            result[key] = clone(frame[key], {});
+        }
+        else {
+            result[key] = frame[key];
+        }
+    }
+    return result;
 }
 
 function getParentFrame(parent, frameId) {
