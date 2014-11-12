@@ -40,7 +40,7 @@ function linkChildren(fileUrl) {
     }
 
     var fileName = file.getFileName(fileUrl);
-    var texture = {"imagePath":stuData["file"], "SubTexture":[], "name":fileName};
+    var texture = {"imagePath":stuData["file"], "SubTexture":[], "name":"cca"};
 
     for (var key in stuData["frames"]) {
         var frame = stuData["frames"][key];

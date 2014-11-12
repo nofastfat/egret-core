@@ -21,6 +21,9 @@ function linkChildren(fileUrl) {
         var fileList = file.getDirectoryListing(fileUrl, true);
 
         for (var key in fileList) {
+            if (key == "Backup") {
+                continue;
+            }
             var fileName = fileList[key];
 
             var tempFileUrl = path.join(fileUrl, fileName);
@@ -41,6 +44,11 @@ function linkChildren(fileUrl) {
 
         return;
     }
+
+    bones = {};
+    resultArr = [];
+    layersInfo = {};
+
     currentFileUrl = fileUrl;
     var fileName = file.getFileName(fileUrl);
     var dbData = {"armature":[], "version":2.3, "name" : fileName, "frameRate":60};
@@ -71,7 +79,10 @@ function linkChildren(fileUrl) {
 
     file.save(fileUrl.replace(".json", "_ske.json"), JSON.stringify(dbData, null, "\t"));
 
+
     moveResources(fileUrl, stuData["texture_data"]);
+    console.log(fileUrl + "生成完毕");
+
 }
 
 function removeMatrix(data) {
@@ -199,8 +210,6 @@ function setBone(dbBones, stuBones) {
             continue;
         }
 
-        var parentBone = bones[bone["parent"]];
-
         var matrix = new Matrix();
         var o = bone;
         while (o != null) {
@@ -216,6 +225,7 @@ function setBone(dbBones, stuBones) {
         }
         matrix.append(1, 0, 0, 1, 0, 0);
 
+        var parentBone = bones[bone["parent"]];
         bone["transform"]["x"] = matrix["tx"];
         bone["transform"]["y"] = matrix["ty"];
         bone["transform"]["scX"] *= parentBone["transform"]["scX"];
@@ -408,6 +418,9 @@ function setTimeline(dbTimelines, stuTimelines) {
 
                         if (bones[tempName]["parent"] != null) {
                             o = getParentFrame(bones[tempName]["parent"], frameId);
+                            if (o == null) {
+                                break;
+                            }
                             tempName = bones[tempName]["parent"];
                         }
                         else {
@@ -428,11 +441,18 @@ function setTimeline(dbTimelines, stuTimelines) {
                     }
                     else {
                         var dbParentFrame = getParentFrame(bone["parent"], frameId);
-
-                        tempFrame["transform"]["scX"] = tempFrame["matrix"][2] * dbParentFrame["transform"]["scX"];
-                        tempFrame["transform"]["scY"] = tempFrame["matrix"][3] * dbParentFrame["transform"]["scY"];
-                        tempFrame["transform"]["skX"] = tempFrame["matrix"][5] + dbParentFrame["transform"]["skX"];
-                        tempFrame["transform"]["skY"] = tempFrame["matrix"][6] + dbParentFrame["transform"]["skY"];
+                        if (dbParentFrame) {
+                            tempFrame["transform"]["scX"] = tempFrame["matrix"][2] * dbParentFrame["transform"]["scX"];
+                            tempFrame["transform"]["scY"] = tempFrame["matrix"][3] * dbParentFrame["transform"]["scY"];
+                            tempFrame["transform"]["skX"] = tempFrame["matrix"][5] + dbParentFrame["transform"]["skX"];
+                            tempFrame["transform"]["skY"] = tempFrame["matrix"][6] + dbParentFrame["transform"]["skY"];
+                        }
+                        else {
+                            tempFrame["transform"]["scX"] = tempFrame["matrix"][2];
+                            tempFrame["transform"]["scY"] = tempFrame["matrix"][3];
+                            tempFrame["transform"]["skX"] = tempFrame["matrix"][5];
+                            tempFrame["transform"]["skY"] = tempFrame["matrix"][6];
+                        }
                     }
                 }
 
@@ -465,21 +485,26 @@ function addFrame(frames, frameId) {
         delete midFrame["event"];
 
         var per = lastDu / (lastDu + midDu);
-        if (lastFrame["colorTransform"] || nextFrame["colorTransform"]) {
-            midFrame["colorTransform"] = {};
 
-            midFrame["colorTransform"]["a0"] = getProperty(lastDu, nextFrame, ["colorTransform", "a0"], 255, per);
-            midFrame["colorTransform"]["r0"] = getProperty(lastDu, nextFrame, ["colorTransform", "r0"], 255, per);
-            midFrame["colorTransform"]["g0"] = getProperty(lastDu, nextFrame, ["colorTransform", "g0"], 255, per);
-            midFrame["colorTransform"]["b0"] = getProperty(lastDu, nextFrame, ["colorTransform", "b0"], 255, per);
-            midFrame["colorTransform"]["aM"] = 0;
-            midFrame["colorTransform"]["rM"] = 0;
-            midFrame["colorTransform"]["gM"] = 0;
-            midFrame["colorTransform"]["bM"] = 0;
+        if (lastFrame["displayIndex"] == -1 || nextFrame["displayIndex"] == -1) {
+
         }
+        else {
+            if (lastFrame["colorTransform"] || nextFrame["colorTransform"]) {
+                midFrame["colorTransform"] = {};
 
-        midFrame["matrix"] = getMatrix(lastFrame["matrix"], nextFrame["matrix"], per);
+                midFrame["colorTransform"]["aM"] = getProperty(lastDu, nextFrame, ["colorTransform", "aM"], 255, per);
+                midFrame["colorTransform"]["rM"] = getProperty(lastDu, nextFrame, ["colorTransform", "rM"], 255, per);
+                midFrame["colorTransform"]["gM"] = getProperty(lastDu, nextFrame, ["colorTransform", "gM"], 255, per);
+                midFrame["colorTransform"]["bM"] = getProperty(lastDu, nextFrame, ["colorTransform", "bM"], 255, per);
+                midFrame["colorTransform"]["aM"] = 0;
+                midFrame["colorTransform"]["rM"] = 0;
+                midFrame["colorTransform"]["gM"] = 0;
+                midFrame["colorTransform"]["bM"] = 0;
+            }
 
+            midFrame["matrix"] = getMatrix(lastFrame["matrix"], nextFrame["matrix"], per);
+        }
         frames.splice(i, 0, midFrame);
         return;
     }
@@ -539,6 +564,9 @@ function clone(frame, result) {
 
 function getParentFrame(parent, frameId) {
     var timeline = timelines[parent];
+    if (timeline == null) {
+        return null;
+    }
 
     var tempFrameId = 0;
     for (var i = 0; i < timeline["frame"].length; i++) {
@@ -592,14 +620,14 @@ function setFrame(dbFrames, stuFrames, bone, z) {
 
             if (stuFrame["color"]) {
                 dbFrame["colorTransform"] = {};
-                dbFrame["colorTransform"]["a0"] = stuFrame["color"]["a"];
-                dbFrame["colorTransform"]["r0"] = stuFrame["color"]["r"];
-                dbFrame["colorTransform"]["g0"] = stuFrame["color"]["g"];
-                dbFrame["colorTransform"]["b0"] = stuFrame["color"]["b"];
-                dbFrame["colorTransform"]["aM"] = 0;
-                dbFrame["colorTransform"]["rM"] = 0;
-                dbFrame["colorTransform"]["gM"] = 0;
-                dbFrame["colorTransform"]["bM"] = 0;
+                dbFrame["colorTransform"]["aO"] = 0;
+                dbFrame["colorTransform"]["rO"] = 0;
+                dbFrame["colorTransform"]["gO"] = 0;
+                dbFrame["colorTransform"]["bO"] = 0;
+                dbFrame["colorTransform"]["aM"] = 100 * stuFrame["color"]["a"] / 255;
+                dbFrame["colorTransform"]["rM"] = 100 * stuFrame["color"]["r"] / 255;
+                dbFrame["colorTransform"]["gM"] = 100 * stuFrame["color"]["g"] / 255;
+                dbFrame["colorTransform"]["bM"] = 100 * stuFrame["color"]["b"] / 255;
             }
 
         dbFrame["transform"] = {};
