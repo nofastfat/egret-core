@@ -184,7 +184,7 @@ module egret {
          * @param y {number}
          * @param maxWidth {numbe}
          */
-        public _drawText(textField:egret.TextField, text:string, x:number, y:number, maxWidth:number, style:Object) {
+        public drawText(textField:egret.TextField, text:string, x:number, y:number, maxWidth:number, style:Object) {
             Profiler.getInstance().onDrawImage();
             if (style["textColor"]) {
                 var textColor = style["textColor"];

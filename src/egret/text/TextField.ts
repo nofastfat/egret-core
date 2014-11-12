@@ -723,10 +723,10 @@ module egret {
                 for (var j:number = 0; j < lineArr.length - 1; j++) {
                     if (!forMeasure) {
                         if (this._type == egret.TextFieldType.INPUT) {
-                            renderContext._drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], {});
+                            renderContext.drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], {});
                         }
                         else {
-                            renderContext._drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], lineArr[j][1]);
+                            renderContext.drawText(this, lineArr[j][0], drawX, drawY, lineArr[j][2], lineArr[j][1]);
                         }
                     }
                     drawX += lineArr[j][2];

@@ -210,7 +210,7 @@ module egret {
         }
 
 
-        public _drawText(textField:egret.TextField, text:string, x:number, y:number, maxWidth:number, style:Object) {
+        public drawText(textField:egret.TextField, text:string, x:number, y:number, maxWidth:number, style:Object) {
             var textColor:string;
             if (style["textColor"]) {
                 textColor = toColorString(style["textColor"]);
@@ -243,7 +243,7 @@ module egret {
                 renderContext.strokeText(text, x + this._transformTx, y + this._transformTy, maxWidth || 0xFFFF);
             }
             renderContext.fillText(text, x + this._transformTx, y + this._transformTy, maxWidth || 0xFFFF);
-            super._drawText(textField, text, x, y, maxWidth, style);
+            super.drawText(textField, text, x, y, maxWidth, style);
         }
 
         public strokeRect(x, y, w, h, color) {
