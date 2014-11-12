@@ -84,6 +84,7 @@ module egret {
                 return;
             }
 
+            this._inputType = type;
             if (this.inputElement != null) {
                 this.div.removeChild(this.inputElement);
             }
