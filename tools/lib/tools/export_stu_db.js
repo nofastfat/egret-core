@@ -6,6 +6,7 @@ var path = require("path");
 var plist = require('../core/plist');
 var file = require("../core/file");
 var fs = require("fs");
+var image = require("../core/image");
 
 function run(currDir, args, opts) {
     if (args[0]) {
@@ -66,12 +67,22 @@ function linkChildren(fileUrl) {
         setAnimation(dbArmature["animation"], stuAnimation["mov_data"]);
     }
 
+    removeMatrix(dbData);
 
     file.save(fileUrl.replace(".json", "_ske.json"), JSON.stringify(dbData, null, "\t"));
 
-
-
     moveResources(fileUrl, stuData["texture_data"]);
+}
+
+function removeMatrix(data) {
+    for (var key in data) {
+        if (key == "matrix") {
+            delete data[key];
+        }
+        else if (data[key] instanceof Object) {
+            removeMatrix(data[key]);
+        }
+    }
 }
 
 function moveResources(fileUrl, resources) {
@@ -251,18 +262,18 @@ function setDisplay(dbDisplays, stuDisplays) {
         dbDisplays.push(dbDisplay);
 
 
-//        var fileName = file.getFileName(currentFileUrl);
-//        var currentPath = currentFileUrl.substring(0, currentFileUrl.lastIndexOf(fileName));
-//        console.log (path.join(currentPath, "..", "Resources", stuDisplay["name"]));
-//        var info = fs.lstatSync(path.join(currentPath, "..", "Resources", stuDisplay["name"]));
-//        console.log(info);
+        var fileName = file.getFileName(currentFileUrl);
+        var currentPath = currentFileUrl.substring(0, currentFileUrl.lastIndexOf(fileName));
+        var picUrl = path.join(currentPath, "..", "Resources", stuDisplay["name"]);
+        var fileData = fs.readFileSync(picUrl);
+        var info = image.getInfo(fileData);
 
-        dbDisplay["name"] = stuDisplay["name"];
+        dbDisplay["name"] = stuDisplay["name"].replace(/(\.png)|(\.jpg)/, "");
         dbDisplay["type"] = stuDisplay["displayType"] == 0 ? "image" : "image";
         dbDisplay["transform"]["x"] = stuDisplay["skin_data"][0]["x"];
         dbDisplay["transform"]["y"] = -stuDisplay["skin_data"][0]["y"];
-        dbDisplay["transform"]["pX"] = 0.5;//stuDisplay["skin_data"][0]["x"];
-        dbDisplay["transform"]["pY"] = 0.5;//-stuDisplay["skin_data"][0]["y"];
+        dbDisplay["transform"]["pX"] = info.width / 2;
+        dbDisplay["transform"]["pY"] = info.height / 2;
         dbDisplay["transform"]["skX"] = radianToAngle(stuDisplay["skin_data"][0]["kX"]);
         dbDisplay["transform"]["skY"] = -radianToAngle(stuDisplay["skin_data"][0]["kY"]);
         dbDisplay["transform"]["scX"] = stuDisplay["skin_data"][0]["cX"];
@@ -329,8 +340,15 @@ function setTimeline(dbTimelines, stuTimelines) {
     //从子往外加帧
     for (var i = 0; i < resultArr.length; i++) {
         var childName = resultArr[resultArr.length - 1 - i];
+        if (timelines[childName] == null) {
+            continue;
+        }
 
         if (bones[childName]["parent"]) {//存在父节点
+            if (timelines[bones[childName]["parent"]] == null) {
+                continue;
+            }
+
             var pFrames = timelines[bones[childName]["parent"]]["frame"];
             var cFrames = timelines[childName]["frame"];
 
@@ -348,10 +366,17 @@ function setTimeline(dbTimelines, stuTimelines) {
         var pName = resultArr[i];
         var children = layersInfo[pName];
         var tempFrameId = 0;
+        if (timelines[pName] == null) {
+            continue;
+        }
+
         var pFrames = timelines[pName]["frame"];
         for (var j = 0; j < pFrames.length; j++) {
             var pFrame = pFrames[j];
             for (var k = 0; k < children.length; k++) {
+                if (timelines[children[k]] == null) {
+                    continue;
+                }
                 var cFrames = timelines[children[k]]["frame"];
                 addFrame(cFrames, tempFrameId);
             }
