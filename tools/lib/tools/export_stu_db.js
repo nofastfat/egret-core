@@ -53,6 +53,9 @@ function linkChildren(fileUrl) {
     var fileName = file.getFileName(fileUrl);
     var dbData = {"armature":[], "version":2.3, "name" : fileName, "frameRate":60};
 
+    chaifenBones(stuData);
+    chaifenTimelines(stuData);
+
     for (var i = 0; i < stuData["animation_data"].length; i++) {
         var stuAnimation = stuData["animation_data"][i];
         var stuArmature = stuData["armature_data"][i];
@@ -77,6 +80,9 @@ function linkChildren(fileUrl) {
 
     removeMatrix(dbData);
 
+    moveDisplayOut(dbData);
+    appendTail(dbData);
+
     file.save(fileUrl.replace(".json", "_ske.json"), JSON.stringify(dbData, null, "\t"));
 
 
@@ -84,6 +90,215 @@ function linkChildren(fileUrl) {
     console.log(fileUrl + "生成完毕");
 
 }
+
+function chaifenTimelines(stuData) {
+    //拆分animation
+    for (var i = 0; i < stuData["animation_data"].length; i++) {
+        var animation = stuData["animation_data"][i];
+        for (var j = 0; j < animation["mov_data"].length; j++) {
+            var mov = animation["mov_data"][j];
+
+            var movBones = mov["mov_bone_data"];
+            var tempBones = {};
+            for (var k = 0; k < movBones.length; k++) {
+                var moveBone = movBones[k];
+
+                var lastFrameId = -1;
+                for (var m = 0; m < moveBone["frame_data"].length; m++) {
+                    var frame = moveBone["frame_data"][m];
+
+                    var currentFrameId = 0;
+                    if (frame["dI"] > 0) {
+                        currentFrameId = frame["dI"];
+                    }
+
+                    var currentName = "egret_" + currentFrameId + "_" + moveBone["name"];
+                    if (tempBones[currentName] == null) {
+                        var tempBone = clone(moveBone, {});
+                        tempBone["frame_data"] = [];
+                        tempBone["name"] = currentName;
+                        tempBones[currentName] = tempBone;
+                    }
+
+                    var useFrame = clone(frame, {});
+                    tempBones[currentName]["frame_data"].push(useFrame);
+
+                    if (lastFrameId != -1 && lastFrameId != currentFrameId) {
+                        var lastLayerFrame = clone(frame, {});
+                        lastLayerFrame["dI"] = -1000;
+                        var lastName = "egret_" + lastFrameId + "_" + moveBone["name"];
+                        tempBones[lastName]["frame_data"].push(lastLayerFrame);
+                    }
+
+                    if (currentFrameId != 0 && lastFrameId != 0) {
+                        var layerFrame = clone(frame, {});
+                        layerFrame["dI"] = -1000;
+                        var zName = "egret_0_" + moveBone["name"];
+                        if (tempBones[zName] == null) {
+                            var zBone = clone(moveBone, {});
+                            zBone["frame_data"] = [];
+                            zBone["name"] = zName;
+                            tempBones[zName] = zBone;
+                        }
+                        tempBones[zName]["frame_data"].push(layerFrame);
+                    }
+
+                    lastFrameId = currentFrameId;
+                }
+
+            }
+
+            mov["mov_bone_data"] = [];
+            for (var key in tempBones) {
+                mov["mov_bone_data"].push(tempBones[key]);
+            }
+        }
+
+    }
+}
+
+function chaifenBones(stuData) {
+    //拆分armature
+    for (var i = 0; i < stuData["armature_data"].length; i++) {
+        var armature = stuData["armature_data"][i];
+
+        var stuBones = armature["bone_data"];
+        var tempBones = [];
+        for (var j = 0; j < stuBones.length; j++) {
+            var bone = stuBones[j];
+
+            for (var k = 0; k < bone["display_data"].length; k++) {
+                var tempBone = clone(bone, {});
+                tempBone["name"] = "egret_" + k + "_" + tempBone["name"];
+                leftArrayByIndex(tempBone["display_data"], k);
+                if (tempBone["parent"] != null && tempBone["parent"] != "") {
+                    tempBone["parent"] = "egret_0_" + tempBone["parent"];
+                }
+                tempBones.push(tempBone);
+            }
+        }
+        armature["bone_data"] = tempBones;
+    }
+}
+
+function leftArrayByIndex(array, index) {
+    if (index > 0) {
+        array.splice(0, index);
+    }
+
+    if (array.length > 1) {
+        array.splice(1, array.length - 1);
+    }
+}
+
+function appendTail(dbData) {
+    for (var i = 0; i < dbData["armature"].length; i++) {
+        var armature = dbData["armature"][i];
+        for (var j = 0; j < armature["animation"].length; j++) {
+            var animation = armature["animation"][j];
+            var totalDuration = animation["duration"];
+
+            for (var k = 0; k < animation["timeline"].length; k++) {
+                var timeline = animation["timeline"][k];
+
+                var tempDuration = 0;
+                for (var m = 0; m < timeline["frame"].length; m++) {
+                    var frame = timeline["frame"][m];
+                    tempDuration += frame["duration"];
+                }
+                if (tempDuration < totalDuration) {
+                    var lastFrame = timeline["frame"][m - 1];
+                    if (lastFrame["displayIndex"] != -1) {
+                        timeline["frame"].push({"displayIndex": -1, "duration":totalDuration - tempDuration});
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+function getSlotTransform(dbData, slotName, displayIndex) {
+    for (var i = 0; i < dbData["armature"].length; i++) {
+        var armature = dbData["armature"][i];
+        for (var j = 0; j < armature["skin"].length; j++) {
+            var skin = armature["skin"][j];
+            for (var k = 0; k < skin["slot"].length; k++) {
+                var slot = skin["slot"][k];
+                if (slot["name"] != slotName) {
+                    continue;
+                }
+
+                var displayLen = slot["display"].length;
+                if (displayIndex >= displayLen) {
+                    return slot["display"][displayLen - 1]["transform"];
+                }
+
+                return slot["display"][displayIndex]["transform"];
+            }
+        }
+    }
+    return null;
+}
+
+function getTransformsMatrix(transforms) {
+    var matrix = new Matrix();
+    for (var i = 0; i < transforms.length; i++) {
+        var transfrom = transforms[i];
+        matrix.prependTransform(transfrom["x"], transfrom["y"], transfrom["scX"], transfrom["scY"], 0, transfrom["skX"], transfrom["skY"], 0, 0);
+    }
+    matrix.append(1, 0, 0, 1, 0, 0);
+    return matrix;
+}
+
+function moveDisplayOut(dbData) {
+    for (var i = 0; i < dbData["armature"].length; i++) {
+        var armature = dbData["armature"][i];
+        for (var j = 0; j < armature["animation"].length; j++) {
+            var animation = armature["animation"][j];
+            for (var k = 0; k < animation["timeline"].length; k++) {
+                var timeline = animation["timeline"][k];
+                for (var m = 0; m < timeline["frame"].length; m++) {
+                    var frame = timeline["frame"][m];
+
+                    if (frame["displayIndex"] == null || frame["displayIndex"] >= 0) {
+                        var parentTransform = frame["transform"];
+                        var childTransform = getSlotTransform(dbData, timeline["name"], frame["displayIndex"] || 0);
+
+                        var matrix = getTransformsMatrix([childTransform, parentTransform]);
+
+                        parentTransform["x"] = matrix.tx;
+                        parentTransform["y"] = matrix.ty;
+                        parentTransform["skX"] += childTransform["skX"] * (parentTransform["scY"] / Math.abs(parentTransform["scY"]));
+                        parentTransform["skY"] += childTransform["skY"] * (parentTransform["scY"] / Math.abs(parentTransform["scY"]));
+                        parentTransform["scX"] *= childTransform["scX"];
+                        parentTransform["scY"] *= childTransform["scY"];
+                    }
+                }
+            }
+        }
+    }
+
+    for (var i = 0; i < dbData["armature"].length; i++) {
+        var armature = dbData["armature"][i];
+        for (var j = 0; j < armature["skin"].length; j++) {
+            var skin = armature["skin"][j];
+            for (var k = 0; k < skin["slot"].length; k++) {
+                var slot = skin["slot"][k];
+                for (var m = 0; m < slot["display"].length; m++) {
+                    var display = slot["display"][m];
+                    display["transform"]["x"] = 0;
+                    display["transform"]["y"] = 0;
+                    display["transform"]["scX"] = 1;
+                    display["transform"]["scY"] = 1;
+                    display["transform"]["skX"] = 0;
+                    display["transform"]["skY"] = 0;
+                }
+            }
+        }
+    }
+}
+
 
 function removeMatrix(data) {
     for (var key in data) {
@@ -149,27 +364,51 @@ function resortLayers() {
     }
 
     resultArr.reverse();
+
 }
 
 function radianToAngle(radian) {
     return radian * 180 / Math.PI;
 }
 
+function addToArrayObj(arrayObj, index, obj) {
+    if (arrayObj[index] == null) {
+        arrayObj[index] = [];
+    }
+    arrayObj[index].push(obj);
+}
+
+function sortArrayObj(arrayObj, resultArray) {
+    var maxIdx = 0;
+    for (var key in arrayObj) {
+        maxIdx = Math.max(key, maxIdx);
+    }
+
+    for (var i = 0; i <= maxIdx; i++) {
+        if (arrayObj[i] == null) {
+            continue;
+        }
+
+        for (var j = 0; j < arrayObj[i].length; j++) {
+            resultArray.push(arrayObj[i][j]);
+        }
+    }
+}
 
 var bones = {};
 function setBone(dbBones, stuBones) {
 
     var maxIdx = 0;
     //层级父子数组
+
+    var tempDbBones = {};
     for (var i = 0; i < stuBones.length; i++) {
         var stuBone = stuBones[i];
-
         var dbBone = {"transform":{}};
-        //dbBones.push(dbBone);
-        dbBones[stuBone["z"]] = dbBone;
-        maxIdx = Math.max(maxIdx, stuBone["z"]);
+
+        addToArrayObj(tempDbBones, stuBone["z"], dbBone);
+
         dbBone["name"] = stuBone["name"];
-        //dbBone["z"] = stuBone["z"];
 
         if (stuBone["parent"] != null && stuBone["parent"] != "") {
             dbBone["parent"] = stuBone["parent"];
@@ -191,12 +430,8 @@ function setBone(dbBones, stuBones) {
         bones[stuBone["name"]] = dbBone;
     }
 
-    for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
-        if (dbBones[i] == null) {
-            dbBones.splice(i, 1);
-            i--;
-            continue;
-        }
+    sortArrayObj(tempDbBones, dbBones);
+    for (var i = 0; i < dbBones.length; i++) {
         dbBones[i]["z"] = i;
     }
 
@@ -206,6 +441,7 @@ function setBone(dbBones, stuBones) {
         var nodeName = resultArr[i];
 
         var bone = bones[nodeName];
+
         if (bone["parent"] == null) {
             continue;
         }
@@ -237,12 +473,13 @@ function setBone(dbBones, stuBones) {
 
 function setSlot(dbSlots, stuSlots) {
     var maxIdx = 0;
+
+    var tempDbSlots = {};
     for (var i = 0; i < stuSlots.length; i++) {
         var stuSlot = stuSlots[i];
 
         var dbSlot = {};
-        dbSlots[bones[stuSlot["name"]]["z"]] = dbSlot;
-        maxIdx = Math.max(maxIdx, bones[stuSlot["name"]]["z"]);
+        addToArrayObj(tempDbSlots, bones[stuSlot["name"]]["z"], dbSlot);
 
         dbSlot["blendMode"] = "normal";
         dbSlot["z"] = bones[stuSlot["name"]]["z"];
@@ -254,14 +491,13 @@ function setSlot(dbSlots, stuSlots) {
         setDisplay(dbSlot["display"], stuSlot["display_data"]);
     }
 
-    for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
-        if (dbSlots[i] == null) {
-            dbSlots.splice(i, 1);
-            i--;
-            continue;
-        }
+
+    sortArrayObj(tempDbSlots, dbSlots);
+
+    for (var i = 0; i < dbSlots.length; i++) {
         dbSlots[i]["z"] = i;
     }
+
 }
 
 function setDisplay(dbDisplays, stuDisplays) {
@@ -302,7 +538,7 @@ function setAnimation(dbAnimations, stuAnimations) {
         dbAnimation["duration"] = stuAnimation["dr"];
         dbAnimation["name"] = stuAnimation["name"];
         dbAnimation["fadeInTime"] = 0;
-        dbAnimation["tweenEasing"] = stuAnimation["twE"];
+        //dbAnimation["tweenEasing"] = stuAnimation["twE"];
         dbAnimation["loop"] = stuAnimation["lp"] == true ? 0 : 1;
 
         dbAnimation["timeline"] = [];
@@ -314,6 +550,7 @@ var timelines = {};
 var count = 0;
 function setTimeline(dbTimelines, stuTimelines) {
     count++;
+    var tempDbTimelines = {};
 
     timelines = {};
     var maxIdx = 0;
@@ -322,8 +559,8 @@ function setTimeline(dbTimelines, stuTimelines) {
 
         var dbTimeline = {};
         dbTimeline["name"] = stuTimeline["name"];
-        dbTimelines[bones[stuTimeline["name"]]["z"]] = dbTimeline;
-        maxIdx = Math.max(maxIdx, bones[stuTimeline["name"]]["z"]);
+
+        addToArrayObj(tempDbTimelines, bones[stuTimeline["name"]]["z"], dbTimeline);
         dbTimeline["offset"] = 0;
         dbTimeline["scale"] = 1;
 
@@ -334,13 +571,10 @@ function setTimeline(dbTimelines, stuTimelines) {
         setFrame(dbTimeline["frame"], stuTimeline["frame_data"], bones[dbTimeline["name"]], i);
     }
 
+    sortArrayObj(tempDbTimelines, dbTimelines);
+
     //设置层级
-    for (var i = 0, count = 0; count <= maxIdx; i++, count++) {
-        if (dbTimelines[i] == null) {
-            dbTimelines.splice(i, 1);
-            i--;
-            continue;
-        }
+    for (var i = 0; i < dbTimelines.length; i++) {
         var frames = dbTimelines[i]["frame"];
         for (var k = 0; k < frames.length; k++) {
             frames[k]["z"] = i;
@@ -594,11 +828,22 @@ function setFrame(dbFrames, stuFrames, bone, z) {
             }
         }
 
+        if (stuFrame["dI"] == -1) {
+            //dbFrame["displayIndex"] = 0;
+            dbFrame["hide"] = 1;
+        }
+
         if (stuFrame["dI"] > 0) {
             dbFrame["displayIndex"] = stuFrame["dI"];
         }
         else if (stuFrame["dI"] == -1000) {
+            //dbFrame["displayIndex"] = 0;
             dbFrame["hide"] = 1;
+        }
+
+
+        if (stuFrame["tweenFrame"] == false) {
+            dbFrame["tweenEasing"] = "NaN";
         }
 
         dbFrames.push(dbFrame);
@@ -616,7 +861,7 @@ function setFrame(dbFrames, stuFrames, bone, z) {
 
 
         dbFrame["z"] = z;//stuFrame["z"];
-        dbFrame["tweenEasing"] = stuFrame["twE"];
+        //dbFrame["tweenEasing"] = stuFrame["twE"];
 
             if (stuFrame["color"]) {
                 dbFrame["colorTransform"] = {};
