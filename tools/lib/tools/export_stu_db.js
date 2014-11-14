@@ -17,13 +17,13 @@ function run(currDir, args, opts) {
 
 var currentFileUrl = "";
 function linkChildren(fileUrl) {
+    if (fileUrl.indexOf("Backup") >= 0) {
+        return;
+    }
     if (file.isDirectory(fileUrl)) {
         var fileList = file.getDirectoryListing(fileUrl, true);
 
         for (var key in fileList) {
-            if (key == "Backup") {
-                continue;
-            }
             var fileName = fileList[key];
 
             var tempFileUrl = path.join(fileUrl, fileName);
@@ -53,7 +53,11 @@ function linkChildren(fileUrl) {
     var fileName = file.getFileName(fileUrl);
     var dbData = {"armature":[], "version":2.3, "name" : fileName, "frameRate":60};
 
+    //先补全父子关键帧
+    fillStuFrames(stuData);
+    //拆分同一个bone里多个display
     chaifenBones(stuData);
+    //对应拆分动画
     chaifenTimelines(stuData);
 
     for (var i = 0; i < stuData["animation_data"].length; i++) {
@@ -91,6 +95,170 @@ function linkChildren(fileUrl) {
 
 }
 
+//补全studio中父子骨骼的关键帧，保证最终父子骨骼的关键帧位置完全相同
+function fillStuFrames(stuData) {
+    for (var i = 0; i < stuData["armature_data"].length; i++) {
+        var armature = stuData["armature_data"][i];
+        var animation = stuData["animation_data"][i];
+
+        fillStu(armature, animation);
+    }
+}
+
+function fillStu(armature, animation) {
+    var tempHasChildrenNames = {};//拥有的子节点
+    var tempOwnParentNames = {};//对应父节点
+    var tempSortArray = [];//父子关系，父在前
+    //找出 父子关系
+    for (var i = 0; i < armature["bone_data"].length; i++) {
+        var bone = armature["bone_data"][i];
+        if (tempHasChildrenNames[bone["name"]] == null) {
+            tempHasChildrenNames[bone["name"]] = [];
+        }
+
+        if (bone["parent"] != null && bone["parent"] != "")  {
+            if (tempHasChildrenNames[bone["parent"]] == null) {
+                tempHasChildrenNames[bone["parent"]] = [];
+            }
+            tempHasChildrenNames[bone["parent"]].push(bone["name"]);
+
+            tempOwnParentNames[bone["name"]] = bone["parent"];
+        }
+    }
+
+    var tempArr = [];
+    for (var name in tempHasChildrenNames) {
+        tempArr.push({"name" : name, "children" : tempHasChildrenNames[name].concat([])});
+    }
+    while (tempArr.length > 0) {
+        for (var i = tempArr.length - 1; i >= 0; i--) {
+            var info = tempArr[i];
+            if (info["children"].length == 0) {
+                tempSortArray.push(info["name"]);
+                tempArr.splice(i, 1);
+                for (var j = 0; j < tempArr.length; j++) {
+                    var temp = tempArr[j];
+                    if (temp["children"].indexOf(info["name"]) >= 0) {
+                        var idx = temp["children"].indexOf(info["name"]);
+                        temp["children"].splice(idx, 1);
+                    }
+                }
+            }
+        }
+    }
+    tempSortArray.reverse();
+
+    for (var i = 0; i < animation["mov_data"].length; i++) {
+        fillMovData(animation["mov_data"][i], tempSortArray, tempHasChildrenNames, tempOwnParentNames);
+    }
+}
+
+function fillMovData(mov_data, tempSortArray, tempHasChildrenNames, tempOwnParentNames) {
+    //取出当前拥有的层级
+    var tempLayers = {};
+    for (var i = 0; i < mov_data["mov_bone_data"].length; i++) {
+        var movBone = mov_data["mov_bone_data"][i];
+        tempLayers[movBone["name"]] = movBone;
+    }
+
+    //从子往外
+    for (var i = 0; i < tempSortArray.length; i++) {
+        var childName = tempSortArray[tempSortArray.length - 1 - i];
+        if (tempLayers[childName] == null || tempOwnParentNames[childName] == null || tempOwnParentNames[childName] == "") {
+            //当前有child，并且有父节点
+            continue;
+        }
+
+        var childLayer = tempLayers[childName];
+        for (var j = 0; j < childLayer["frame_data"].length; j++) {
+            var frameId = childLayer["frame_data"][j]["fi"];
+            if (tempLayers[tempOwnParentNames[childName]]) {
+                addStudioFrame(tempLayers[tempOwnParentNames[childName]]["frame_data"], frameId);
+            }
+        }
+    }
+
+
+    //从父往子
+    for (var i = 0; i < tempSortArray.length; i++) {
+        var parentName = tempSortArray[i];
+        if (tempLayers[parentName] == null || tempHasChildrenNames[parentName] == null || tempHasChildrenNames[parentName].length <= 0) {
+            continue;
+        }
+
+        var parentLayer = tempLayers[parentName];
+        for (var j = 0; j < parentLayer["frame_data"].length; j++) {
+            var frameId = parentLayer["frame_data"][j]["fi"];
+
+            var childrenNames = tempHasChildrenNames[parentName];
+            for (var k = 0; k < childrenNames.length; k++) {
+                var childName = childrenNames[k];
+                if (tempLayers[childName]) {
+                    addStudioFrame(tempLayers[childName]["frame_data"], frameId);
+                }
+            }
+        }
+    }
+}
+
+function addStudioFrame(frames, frameId) {
+    for (var i = 0; i < frames.length; i++) {
+        var frame = frames[i];
+        var tempFrameId = frame["fi"];
+        if (tempFrameId == frameId) {
+            return;
+        }
+        else if (tempFrameId < frameId) {
+            continue;
+        }
+
+        var lastFrame = frames[i - 1];
+        var nextFrame = frames[i];
+        var midFrame = clone(lastFrame, {});
+        midFrame["fi"] = frameId;
+
+        if (i == 0) {//在最前面补齐
+            frames.splice(i, 0, midFrame);
+            return;
+        }
+        var lastFrameId = lastFrame["fi"];
+        var nextFrameId = nextFrame["fi"];
+
+
+        var per = (frameId - lastFrameId) / (nextFrameId - lastFrameId);
+        midFrame["x"] = getProperty(lastFrame, nextFrame, "x");
+        midFrame["y"] = getProperty(lastFrame, nextFrame, "y");
+        midFrame["cX"] = getProperty(lastFrame, nextFrame, "cX");
+        midFrame["cY"] = getProperty(lastFrame, nextFrame, "cY");
+        midFrame["kX"] = getProperty(lastFrame, nextFrame, "kX");
+        midFrame["kY"] = getProperty(lastFrame, nextFrame, "kY");
+
+        if (lastFrame["color"] || nextFrame["color"]) {
+            midFrame["color"] = {};
+
+            midFrame["color"]["a"] = getProperty(lastFrame, nextFrame, ["color", "a"], 255, per);
+            midFrame["color"]["r"] = getProperty(lastFrame, nextFrame, ["color", "r"], 255, per);
+            midFrame["color"]["g"] = getProperty(lastFrame, nextFrame, ["color", "g"], 255, per);
+            midFrame["color"]["b"] = getProperty(lastFrame, nextFrame, ["color", "b"], 255, per);
+        }
+
+        frames.splice(i, 0, midFrame);
+        return;
+    }
+
+    //最后加上
+    var lastFrame = frames[frames.length - 1];
+    var midFrame = clone(lastFrame, {});
+    if (midFrame == null) {
+        console.log(frames)
+    }
+    midFrame["fi"] = frameId;
+
+    frames.push(midFrame);
+}
+
+
+//拆分同一个bone有多个display
 function chaifenTimelines(stuData) {
     //拆分animation
     for (var i = 0; i < stuData["animation_data"].length; i++) {
@@ -157,6 +325,7 @@ function chaifenTimelines(stuData) {
     }
 }
 
+//拆分同一个bone有多个display
 function chaifenBones(stuData) {
     //拆分armature
     for (var i = 0; i < stuData["armature_data"].length; i++) {
@@ -581,52 +750,52 @@ function setTimeline(dbTimelines, stuTimelines) {
         }
     }
 
-    //从子往外加帧
-    for (var i = 0; i < resultArr.length; i++) {
-        var childName = resultArr[resultArr.length - 1 - i];
-        if (timelines[childName] == null) {
-            continue;
-        }
-
-        if (bones[childName]["parent"]) {//存在父节点
-            if (timelines[bones[childName]["parent"]] == null) {
-                continue;
-            }
-
-            var pFrames = timelines[bones[childName]["parent"]]["frame"];
-            var cFrames = timelines[childName]["frame"];
-
-            var tempFrameId = 0;
-            for (var j = 0; j < cFrames.length; j++) {
-                var cFrame = cFrames[j];
-                addFrame(pFrames, tempFrameId);
-                tempFrameId += cFrame["duration"];
-            }
-        }
-    }
-
-    //从父往外加帧
-    for (var i = 0; i < resultArr.length; i++) {
-        var pName = resultArr[i];
-        var children = layersInfo[pName];
-        var tempFrameId = 0;
-        if (timelines[pName] == null) {
-            continue;
-        }
-
-        var pFrames = timelines[pName]["frame"];
-        for (var j = 0; j < pFrames.length; j++) {
-            var pFrame = pFrames[j];
-            for (var k = 0; k < children.length; k++) {
-                if (timelines[children[k]] == null) {
-                    continue;
-                }
-                var cFrames = timelines[children[k]]["frame"];
-                addFrame(cFrames, tempFrameId);
-            }
-            tempFrameId += pFrame["duration"];
-        }
-    }
+//    //从子往外加帧
+//    for (var i = 0; i < resultArr.length; i++) {
+//        var childName = resultArr[resultArr.length - 1 - i];
+//        if (timelines[childName] == null) {
+//            continue;
+//        }
+//
+//        if (bones[childName]["parent"]) {//存在父节点
+//            if (timelines[bones[childName]["parent"]] == null) {
+//                continue;
+//            }
+//
+//            var pFrames = timelines[bones[childName]["parent"]]["frame"];
+//            var cFrames = timelines[childName]["frame"];
+//
+//            var tempFrameId = 0;
+//            for (var j = 0; j < cFrames.length; j++) {
+//                var cFrame = cFrames[j];
+//                addFrame(pFrames, tempFrameId);
+//                tempFrameId += cFrame["duration"];
+//            }
+//        }
+//    }
+//
+//    //从父往外加帧
+//    for (var i = 0; i < resultArr.length; i++) {
+//        var pName = resultArr[i];
+//        var children = layersInfo[pName];
+//        var tempFrameId = 0;
+//        if (timelines[pName] == null) {
+//            continue;
+//        }
+//
+//        var pFrames = timelines[pName]["frame"];
+//        for (var j = 0; j < pFrames.length; j++) {
+//            var pFrame = pFrames[j];
+//            for (var k = 0; k < children.length; k++) {
+//                if (timelines[children[k]] == null) {
+//                    continue;
+//                }
+//                var cFrames = timelines[children[k]]["frame"];
+//                addFrame(cFrames, tempFrameId);
+//            }
+//            tempFrameId += pFrame["duration"];
+//        }
+//    }
 
     //
     for (var i = 0; i < resultArr.length; i++) {
