@@ -106,12 +106,8 @@ module egret {
             if (this._type == egret.TextFieldType.INPUT) {
                 return this._inputUtils._getText();
             }
-            else if (this._multiline) {//多行
-                return this._text;
-            }
-            else {
-                return this._text.replace(/[\r\n]/g, "");
-            }
+
+            return this._text;
         }
 
         public _setTextDirty(): void {
@@ -476,7 +472,7 @@ module egret {
         }
 
         /**
-         * 表示字段是否为多行文本字段。
+         * 表示字段是否为多行文本字段。注意，此属性仅在type为TextFieldType.INPUT时才有效。
          * 如果值为 true，则文本字段为多行文本字段；如果值为 false，则文本字段为单行文本字段。在类型为 TextFieldType.INPUT 的字段中，multiline 值将确定 Enter 键是否创建新行（如果值为 false，则将忽略 Enter 键）。
          * 默认值为 false。
          * @member {boolean} egret.TextField#multiline
@@ -652,7 +648,7 @@ module egret {
                     }
                     if (j < textArr.length - 1) {//非最后一个
                         linesArr[lineCount].push([lineW, lineH]);
-                        if (!this._multiline) {
+                        if (this._type == TextFieldType.INPUT && !this._multiline) {
                             return linesArr;
                         }
                         lineCount++;
