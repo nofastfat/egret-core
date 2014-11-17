@@ -148,6 +148,16 @@ module egret {
 
         }
 
+        public _setScale(x:number, y:number):void {
+            super._setScale(x, y);
+
+            var scaleX = egret.StageDelegate.getInstance().getScaleX();
+            var scaleY = egret.StageDelegate.getInstance().getScaleY();
+            this.div.scale.x = scaleX * x;
+            this.div.scale.y = scaleY * y;
+            this.div.transforms();
+        }
+
         public changePosition(x:number, y:number):void {
 //            if (this._isShow) {
                 var scaleX = egret.StageDelegate.getInstance().getScaleX();

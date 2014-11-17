@@ -149,6 +149,11 @@ module egret {
                 oldTransFormTy != newTransForm.ty) {
                 var point = this._text.localToGlobal();
                 this.stageText.changePosition(point.x, point.y);
+
+                var self = this;
+                egret.callLater(function () {
+                    self.stageText._setScale(self._text._worldTransform.a, self._text._worldTransform.d);
+                }, this);
             }
         }
 
