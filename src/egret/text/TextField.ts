@@ -592,7 +592,7 @@ module egret {
             this._textArr = text2Arr;
         }
 
-        private getLinesArr():Array<any> {
+        public _getLinesArr():Array<any> {
             var text2Arr:Array<any> = this._textArr;
 
             var renderContext = egret.MainContext.instance.rendererContext;
@@ -670,7 +670,7 @@ module egret {
          */
         private drawText(renderContext:RendererContext, forMeasure:boolean):Rectangle {
 
-            var lines:Array<any> = this.getLinesArr();
+            var lines:Array<any> = this._getLinesArr();
             renderContext.setupFont(this);
 
             if (!lines) {
