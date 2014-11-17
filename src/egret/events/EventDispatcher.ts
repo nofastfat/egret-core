@@ -119,19 +119,22 @@ module egret {
         /**
          * 在一个事件列表中按优先级插入事件对象
          */
-        public _insertEventBin(list:Array<any>, listener:Function, thisObject:any, priority:number):boolean {
+        public _insertEventBin(list:Array<any>, listener:Function, thisObject:any, priority:number, display = undefined):boolean {
             var insertIndex:number = -1;
             var length:number = list.length;
             for (var i:number = 0; i < length; i++) {
                 var bin:any = list[i];
-                if (bin.listener === listener && bin.thisObject === thisObject) {
+                if (bin.listener === listener && bin.thisObject === thisObject && bin.display === display) {
                     return false;
                 }
                 if (insertIndex == -1 && bin.priority < priority) {
                     insertIndex = i;
                 }
             }
-            var eventBin = {listener: listener, thisObject: thisObject, priority: priority};
+            var eventBin:any = {listener: listener, thisObject: thisObject, priority: priority};
+            if(display) {
+                eventBin.display = display;
+            }
             if (insertIndex != -1) {
                 list.splice(insertIndex, 0, eventBin);
             }
@@ -167,13 +170,13 @@ module egret {
         /**
          * 在一个事件列表中按优先级插入事件对象
          */
-        public _removeEventBin(list:Array<any>, listener:Function, thisObject:any):boolean {
+        public _removeEventBin(list:Array<any>, listener:Function, thisObject:any, display = undefined):boolean {
             var length:number = list.length;
             for (var i:number = 0; i < length; i++) {
                 var bin:any = list[i];
-                if (bin.listener === listener && bin.thisObject === thisObject) {
+                if (bin.listener === listener && bin.thisObject === thisObject && bin.display === display) {
                     list.splice(i, 1);
-                    return true
+                    return true;
                 }
             }
             return false;
